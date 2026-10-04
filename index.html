@@ -1,0 +1,1289 @@
+<!doctype html>
+
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motion Primer</title>
+<style>
+  :root{ --paper:#f6f5f2; --ink:#1a1a1a; --muted:#8b8880; --line:#dcdad4; --accent:#f0435c; --panel:#fdfdfc; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--paper);font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink)}
+  canvas{display:block;cursor:crosshair}
+  #panel{position:fixed;top:16px;left:16px;width:274px;max-height:calc(100vh - 84px);background:var(--panel);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;overflow:hidden;z-index:10}
+  #tabs{display:flex;border-bottom:1px solid var(--line)}
+  #tabs button{flex:1;padding:10px 0;background:none;border:0;font:inherit;color:var(--muted);cursor:pointer;text-transform:uppercase;letter-spacing:.06em;font-size:10px}
+  #tabs button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 -2px var(--ink)}
+  #body{overflow-y:auto;padding:12px 14px 16px}
+  .tab{display:none}.tab.on{display:block}
+  fieldset{border:0;margin:0 0 13px;padding:0}
+  legend{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;cursor:pointer;user-select:none}
+  legend::before{content:'▾ ';font-size:8px;color:var(--muted)}
+  fieldset.closed>legend::before{content:'▸ '}
+  fieldset.closed>*:not(legend){display:none}
+  .row{display:grid;grid-template-columns:1fr 60px 44px;gap:8px;align-items:center;margin:5px 0}
+  .row.sel2{grid-template-columns:1fr 1.15fr}
+  .row label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row input[type=range]{width:100%;accent-color:var(--ink);height:2px}
+  .row input[type=number]{width:100%;font:10px ui-monospace,monospace;color:var(--muted);background:var(--paper);border:1px solid var(--line);border-radius:4px;text-align:right;padding:3px 4px}
+  .row input[type=number]:focus{color:var(--ink);outline:none;border-color:var(--ink)}
+  .row input[type=number]::-webkit-inner-spin-button{display:none}
+  .row.toggle{grid-template-columns:1fr auto}
+  .sw{appearance:none;-webkit-appearance:none;width:30px;height:16px;margin:0;cursor:pointer;border:1px solid var(--line);border-radius:99px;background:var(--paper);position:relative}
+  .sw::before{content:'';position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:var(--muted);transition:left .15s,background .15s}
+  .sw:checked{border-color:var(--ink);background:var(--ink)}
+  .sw:checked::before{left:16px;background:var(--paper)}
+  .btn{padding:7px 10px;font:inherit;font-size:11px;background:none;border:1px solid var(--line);border-radius:6px;cursor:pointer;color:var(--ink);margin:3px 4px 3px 0}
+  .btn:hover{border-color:var(--ink)}.btn.acc{border-color:var(--accent);color:var(--accent)}
+  .beh{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:4px}
+  .beh button{padding:7px 4px;font:inherit;font-size:10.5px;background:none;border:1px solid var(--line);border-radius:6px;cursor:pointer;color:var(--ink);text-align:center}
+  .beh button[aria-selected="true"]{border-color:var(--ink);background:var(--ink);color:var(--paper)}
+  .note{color:var(--muted);font-size:10px;margin:6px 0}
+  .tin,select.tin{font:10px ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;background:var(--paper);color:var(--ink);padding:5px 6px;width:100%}
+  select.tin{font-size:11px}.tin:focus{outline:none;border-color:var(--ink)}
+  input[type=color]{width:100%;height:24px;padding:0;border:1px solid var(--line);border-radius:4px;background:none;cursor:pointer}
+  #transport{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:99px;padding:6px 8px;z-index:12}
+  #transport button{font:inherit;font-size:11px;border:1px solid var(--line);background:none;color:var(--ink);border-radius:99px;padding:6px 12px;cursor:pointer}
+  #transport button:hover{border-color:var(--ink)}
+  #transport button.on{border-color:var(--accent);color:var(--accent)}
+  #transport .sp{display:flex;align-items:center;gap:6px;padding:0 6px;color:var(--muted);font-size:10px}
+  #transport input[type=range]{width:78px;accent-color:var(--ink);height:2px}
+  #hint{position:fixed;bottom:58px;left:50%;transform:translateX(-50%);color:var(--muted);font-size:10px;z-index:5;pointer-events:none}
+  #now{position:fixed;top:18px;right:20px;text-align:right;z-index:5;pointer-events:none}
+  #now b{font-size:13px}#now span{color:var(--muted);font-size:10px;display:block}
+  body.noui #panel,body.noui #hint,body.noui #now,body.noui #transport{display:none}
+</style>
+<style>
+:root{--h-bg:#f6f5f2;--h-card:#ecebe6;--h-field:#ffffff;--h-ink:#1a1a1a;--h-ink2:#3d3c39;--h-ink3:#5c5b57;--h-fill:rgba(26,26,26,.07);--h-fill-hover:rgba(26,26,26,.10);--h-fill-strong:rgba(26,26,26,.15);--h-fill-active:rgba(26,26,26,.24);--h-hair:rgba(26,26,26,.10);--h-line:rgba(26,26,26,.14);--h-seg-on:#ffffff;--h-track-s:.02em;--h-ring:oklch(.49 .08 182);--h-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;--h-mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;--h-display:"Inter Tight",-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;
+  --paper:var(--h-bg);--ink:var(--h-ink);--muted:var(--h-ink3);--line:var(--h-hair);--accent:var(--h-ink);--panel:var(--h-bg)}
+body.dark{--h-bg:#161615;--h-card:#21211f;--h-field:#2b2b29;--h-ink:#ecebe6;--h-ink2:#cfcec8;--h-ink3:#a6a59f;--h-fill:rgba(255,255,255,.07);--h-fill-hover:rgba(255,255,255,.10);--h-fill-strong:rgba(255,255,255,.16);--h-fill-active:rgba(255,255,255,.26);--h-hair:rgba(255,255,255,.10);--h-line:rgba(255,255,255,.14);--h-seg-on:#3d3d3a;--h-track-s:.025em;--h-ring:oklch(.78 .09 182 / .7);--paper:var(--h-bg);--ink:var(--h-ink);--muted:var(--h-ink3);--line:var(--h-hair);--accent:var(--h-ink);--panel:var(--h-bg)}
+html,body{font-family:var(--h-sans);font-size:12.5px;line-height:1.45}
+#panel,body.dark #panel{background:var(--h-bg);border:1px solid var(--h-hair);border-radius:6px;color:var(--h-ink);box-shadow:none}
+#tabs{gap:2px;margin:10px 12px 2px;padding:3px;border:0;border-radius:6px;background:var(--h-fill)}
+#tabs button{padding:6px 0;border-radius:4px;font:500 11.5px var(--h-sans);letter-spacing:var(--h-track-s);text-transform:none;color:var(--h-ink2)}
+#tabs button[aria-selected="true"],body.dark #tabs button[aria-selected="true"]{background:var(--h-seg-on);color:var(--h-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+legend{font:600 10.5px var(--h-sans);letter-spacing:.07em;color:var(--h-ink3)}
+.row,.selectRow,.colorRow{min-height:28px;margin:4px 0}
+.row{grid-template-columns:minmax(0,1fr) 92px 40px}
+.row label,.selectRow label,.colorRow label{color:var(--h-ink2);letter-spacing:var(--h-track-s)}
+.row input[type=range]{-webkit-appearance:none;appearance:none;height:26px;margin:0;border-radius:4px;cursor:ew-resize;
+  background:linear-gradient(90deg,var(--h-fill-strong) var(--p,50%),var(--h-fill) var(--p,50%))}
+.row input[type=range]:active{background:linear-gradient(90deg,var(--h-fill-active) var(--p,50%),var(--h-fill) var(--p,50%))}
+.row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:2px;height:26px;border-radius:1px;background:var(--h-ink)}
+.row input[type=range]::-moz-range-thumb{width:2px;height:26px;border:0;border-radius:1px;background:var(--h-ink)}
+.row input[type=number]{border:0;background:transparent;font:12px var(--h-mono);color:var(--h-ink2);text-align:right}
+.sw,body.dark .sw{border:0;background:var(--h-fill-strong)}
+.sw::before{background:var(--h-field)}
+.sw:checked,body.dark .sw:checked{border:0;background:var(--h-ink)}
+.sw:checked::before{background:var(--h-bg)}
+.tin,.sel,.selectRow select{height:26px;border:0;border-radius:4px;background:var(--h-fill);color:var(--h-ink);font:12px var(--h-sans)}
+.seg{gap:2px;padding:3px;border-radius:6px;background:var(--h-fill)}
+.seg button{border:0;border-radius:4px;background:transparent;color:var(--h-ink2);font:500 11.5px var(--h-sans)}
+.seg button[aria-selected=true],.seg button[aria-pressed=true],body.dark .seg button[aria-selected=true],body.dark .seg button[aria-pressed=true]{border:0;background:var(--h-seg-on);color:var(--h-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.beh{gap:2px;padding:3px;border-radius:6px;background:var(--h-fill)}
+.beh button{border:0;border-radius:4px;background:transparent;color:var(--h-ink2);font:500 11.5px var(--h-sans)}
+.beh button[aria-selected="true"]{border:0;background:var(--h-seg-on);color:var(--h-ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+#panel>header b{font:600 10.5px var(--h-sans);letter-spacing:.07em;color:var(--h-ink3)}
+.btn{border:0;border-radius:4px;background:var(--h-fill);color:var(--h-ink);font:500 12px var(--h-sans)}
+.btn:hover{border:0;background:var(--h-fill-hover)}
+.btn.acc{background:var(--h-ink);color:var(--h-bg)}
+.mpad canvas,body.dark .mpad canvas{border:0;border-radius:6px;background:var(--h-field)}
+.colorRow input[type=color]{border:0;border-radius:4px}
+#mtrans button,#mtrans .msp,body.dark #mtrans button,body.dark #mtrans .msp,#uitoggle,body.dark #uitoggle{border:1px solid var(--h-hair);background:var(--h-bg);color:var(--h-ink)}
+#mtrans button[aria-pressed="true"]{background:var(--h-ink);color:var(--h-bg)}
+:focus-visible{outline:2px solid var(--h-ring);outline-offset:1px}
+</style></head>
+<body>
+<canvas id="cv"></canvas>
+<div id="now"><b id="nowName">Swarm</b><span id="nowDesc"></span></div>
+
+<div id="panel">
+  <div id="tabs">
+    <button data-tab="scene" aria-selected="true">Motion</button>
+    <button data-tab="look">Look</button>
+    <button data-tab="io">Export</button>
+  </div>
+  <div id="body">
+    <div class="tab on" data-tab="scene">
+      <fieldset><legend>Behavior</legend><div class="beh" id="behList"></div><p class="note" id="behNote"></p></fieldset>
+      <fieldset id="gBeh"><legend>Behavior params</legend></fieldset>
+      <fieldset id="gSim"><legend>Motor</legend></fieldset>
+      <fieldset id="gInter"><legend>Interaction · bodies</legend></fieldset>
+      <fieldset id="gRot"><legend>Rotation · bodies</legend></fieldset>
+      <fieldset id="gAdv" class="closed"><legend>Advanced</legend></fieldset>
+    </div>
+    <div class="tab" data-tab="look">
+      <fieldset id="gForm"><legend>Formation · text or logo</legend></fieldset>
+      <fieldset id="gObj"><legend>Object · glyph</legend></fieldset>
+      <fieldset id="gTgt"><legend>Center object</legend></fieldset>
+      <fieldset id="gLook"><legend>Canvas</legend></fieldset>
+      <fieldset><legend>Color</legend><div class="row sel2"><label>Ink</label><input type="color" id="col"></div></fieldset>
+    </div>
+    <div class="tab" data-tab="io">
+      <fieldset><legend>Config</legend><button class="btn" id="saveCfg">Save JSON</button><button class="btn" id="loadCfg">Load JSON</button><input type="file" id="loadFile" accept=".json" hidden></fieldset>
+      <fieldset><legend>Image</legend><button class="btn" id="pngBtn">Export PNG</button></fieldset>
+      <fieldset><legend>UI</legend><button class="btn" id="hideBtn">Hide UI (H)</button></fieldset>
+    </div>
+  </div>
+</div>
+
+<div id="transport">
+  <button id="tReplay">▶ Replay</button>
+  <button id="tLoop">Loop: off</button>
+  <div class="sp">Speed<input type="range" id="tSpeed" min="0.3" max="2.2" step="0.1"></div>
+</div>
+<div id="hint">click sets the center · Magnet: fly, then get pulled in · Center object lives in Look (your own image works) · H hides UI</div>
+
+<script>
+const clamp01 = t => Math.max(0, Math.min(1, t));
+
+const lerp = (a, b, t) => a + (b - a) * t;
+
+const angLerp = (a, b, t) => {
+  let d = (b - a + 540) % 360 - 180;
+  return a + d * Math.max(0, Math.min(1, t));
+};
+
+const dampFactor = (k, dt, rate = 3) => Math.pow(k, dt * rate);
+
+function springAccel(px, py, vx, vy, tx, ty, stiffness, damping) {
+  return {
+    ax: -stiffness * (px - tx) - damping * vx,
+    ay: -stiffness * (py - ty) - damping * vy
+  };
+}
+
+function attract(bx, by, tx, ty, urge, boost = 90, soft = 70) {
+  const dx = tx - bx, dy = ty - by, dist = Math.hypot(dx, dy) || 1, pull = urge * (1 + boost / (dist + soft));
+  return {
+    ax: dx / dist * pull,
+    ay: dy / dist * pull,
+    dist: dist
+  };
+}
+
+function flowPotential(x, y, t, s) {
+  return Math.sin(x * s + t * .6) * Math.cos(y * s * 1.3 - t * .4) + .6 * Math.sin(y * s * .7 - t * .5) * Math.cos(x * s * 1.1 + t * .3) + .4 * Math.sin((x + y) * s * .9 + t * .2);
+}
+
+function curlAt(x, y, t, scale, e = 1) {
+  const dPdy = (flowPotential(x, y + e, t, scale) - flowPotential(x, y - e, t, scale)) / (2 * e), dPdx = (flowPotential(x + e, y, t, scale) - flowPotential(x - e, y, t, scale)) / (2 * e);
+  return {
+    x: dPdy,
+    y: -dPdx
+  };
+}
+
+function boidForce(b, flock, R, wSep, wAli, wCoh) {
+  let sx = 0, sy = 0, ax = 0, ay = 0, cx = 0, cy = 0, n = 0;
+  for (const o of flock) {
+    if (o === b) continue;
+    const dx = o.x - b.x, dy = o.y - b.y, d2 = dx * dx + dy * dy;
+    if (d2 > R * R || d2 < 1e-6) continue;
+    const d = Math.sqrt(d2);
+    sx -= dx / d / d;
+    sy -= dy / d / d;
+    ax += o.vx;
+    ay += o.vy;
+    cx += o.x;
+    cy += o.y;
+    n++;
+  }
+  if (!n) return {
+    fx: 0,
+    fy: 0
+  };
+  ax /= n;
+  ay /= n;
+  cx = cx / n - b.x;
+  cy = cy / n - b.y;
+  return {
+    fx: sx * wSep + ax * wAli + cx * wCoh,
+    fy: sy * wSep + ay * wAli + cy * wCoh
+  };
+}
+
+function resolveBodies(bits, collide, push, avoid, radiusK, spin) {
+  for (const b of bits) {
+    b.crowd = Math.max(0, Math.min(1, (b.contacts - 2) / 5));
+    b.contacts = 0;
+  }
+  for (let i = 0; i < bits.length; i++) for (let j = i + 1; j < bits.length; j++) {
+    const A = bits[i], B = bits[j];
+    const rr = (A.rad * A.sc + B.rad * B.sc) * radiusK + 4;
+    const dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy) || 1;
+    if (d >= rr) continue;
+    const nx = dx / d, ny = dy / d, overlap = rr - d;
+    A.contacts++;
+    B.contacts++;
+    const att = 1 - Math.max(A.crowd, B.crowd);
+    if (collide) {
+      const p = overlap * .5 * push;
+      A.x -= nx * p;
+      A.y -= ny * p;
+      B.x += nx * p;
+      B.y += ny * p;
+      const rvn = (B.vx - A.vx) * nx + (B.vy - A.vy) * ny;
+      if (rvn < 0) {
+        const imp = rvn * .5;
+        A.vx += nx * imp;
+        A.vy += ny * imp;
+        B.vx -= nx * imp;
+        B.vy -= ny * imp;
+      }
+    }
+    if (avoid > 0) {
+      const side = (A.seed > B.seed ? 1 : -1) * overlap * avoid * att;
+      A.vx += -ny * side * .5;
+      A.vy += nx * side * .5;
+      B.vx += ny * side * .5;
+      B.vy += -nx * side * .5;
+    }
+    if (spin > 0) {
+      const rvt = (B.vx - A.vx) * -ny + (B.vy - A.vy) * nx;
+      A.av += rvt * spin * .6 * att;
+      B.av -= rvt * spin * .6 * att;
+    }
+  }
+}
+
+function rng(seed) {
+  let s = seed >>> 0 || 1;
+  return () => {
+    s = s * 1664525 + 1013904223 >>> 0;
+    return s / 4294967296;
+  };
+}
+
+const BEHAVIORS = [ {
+  id: 'swarm',
+  name: 'Swarm',
+  ru: 'Swarm',
+  desc: 'Bodies fly freely and interact. Manner: even / gather / spread / flock / flow / vortex.'
+}, {
+  id: 'pack',
+  name: 'Pack',
+  ru: 'Pack',
+  desc: 'Bodies settle into a neat, non-overlapping pack around a point. Spread sets the density.'
+}, {
+  id: 'magnet',
+  name: 'Magnet',
+  ru: 'Magnet',
+  desc: 'Bodies fade and scale in, FLY first, then get pulled into the center (the force grows near the center).'
+}, {
+  id: 'orbit',
+  name: 'Orbit',
+  ru: 'Orbit',
+  desc: 'A ring around the center; Center pull keeps it from flying apart.'
+}, {
+  id: 'fall',
+  name: 'Fall',
+  ru: 'Fall',
+  desc: 'Gravity pulls down, bodies pile up on each other at the floor.'
+}, {
+  id: 'scatter',
+  name: 'Scatter',
+  ru: 'Scatter',
+  desc: 'An impulse from the center outward, then decay.'
+} ];
+
+const MANNERS = [ 'Free', 'Cluster', 'Disperse', 'Flock', 'Flow', 'Vortex' ];
+
+const MANNER_PRESET = {
+  Free: {
+    cohesion: .12,
+    separation: 170,
+    flow: 20
+  },
+  Cluster: {
+    cohesion: .7,
+    separation: 90,
+    flow: 8
+  },
+  Disperse: {
+    cohesion: 0,
+    separation: 560,
+    flow: 8
+  },
+  Flock: {
+    cohesion: .05,
+    separation: 420,
+    flow: 12
+  },
+  Flow: {
+    cohesion: 0,
+    separation: 70,
+    flow: 60
+  },
+  Vortex: {
+    cohesion: .02,
+    separation: 90,
+    flow: 40
+  }
+};
+
+const GLYPH_SHAPES = [ 'mixed', 'circle', 'pill', 'diamond', 'triangle', 'ring', 'plus', 'char' ];
+
+const MIX = [ 'circle', 'pill', 'diamond', 'triangle' ];
+
+const CENTER_SHAPES = [ 'circle', 'ring', 'plate', 'char', 'image', 'none' ];
+
+const USES_CENTER = [ 'magnet', 'orbit', 'pack', 'scatter' ];
+
+const ORIENT_MODES = [ 'velocity', 'lean', 'spin', 'none' ];
+
+const state = {
+  sim: {
+    behavior: 'swarm',
+    count: 90,
+    speed: 1,
+    smooth: .9
+  },
+  swarm: {
+    manner: 'Free',
+    cohesion: .12,
+    separation: 170,
+    flow: 20
+  },
+  pack: {
+    spread: 1
+  },
+  magnet: {
+    urge: 36,
+    floatTime: .8
+  },
+  orbit: {
+    speed: 74,
+    centerPull: .6,
+    spread: .5
+  },
+  inter: {
+    collide: 1,
+    push: .85,
+    avoid: .4,
+    radius: 1
+  },
+  obj: {
+    shape: 'mixed',
+    char: '✳',
+    size: 1,
+    variance: .5,
+    minSize: 4.5
+  },
+  tgt: {
+    shape: 'circle',
+    char: 'S',
+    size: 1
+  },
+  look: {
+    trail: 0,
+    invert: 0,
+    color: '#1a1a1a'
+  },
+  adv: {
+    gravity: 72,
+    swirl: .9,
+    reach: 80
+  },
+  rot: {
+    orient: 'velocity',
+    turn: .7,
+    spin: .6,
+    idle: 0
+  },
+  form: {
+    mode: 'off',
+    text: 'MOTION',
+    scale: 1.4,
+    showGuide: 0
+  },
+  play: {
+    loop: 0
+  },
+  target: {
+    x: .5,
+    y: .5
+  }
+};
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+
+let W = 0, H = 0;
+
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth;
+  H = innerHeight;
+  cv.width = W * dpr;
+  cv.height = H * dpr;
+  cv.style.width = W + 'px';
+  cv.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (bits.length) reinit();
+}
+
+addEventListener('resize', resize);
+
+const css = v => getComputedStyle(document.body).getPropertyValue(v).trim();
+
+const PAPER = css('--paper'), INK = css('--ink'), MUTED = css('--muted'), ACC = css('--accent');
+
+let bits = [], t = 0, lastT = performance.now(), kick = 0, seed = 7, loopT = 0, COM = {
+  x: 0,
+  y: 0
+}, targetImg = null;
+
+let formPoints = [], formMask = null, formStart = 0;
+
+const target = () => ({
+  x: state.target.x * W,
+  y: state.target.y * H
+});
+
+const usesCenter = b => USES_CENTER.includes(b);
+
+function buildFormation() {
+  formPoints = [];
+  formMask = null;
+  if (state.form.mode === 'off') return;
+  const sd = Math.min(1, 900 / Math.max(1, W)), MW = Math.max(2, Math.round(W * sd)), MH = Math.max(2, Math.round(H * sd));
+  const off = document.createElement('canvas');
+  off.width = MW;
+  off.height = MH;
+  const oc = off.getContext('2d');
+  oc.fillStyle = '#000';
+  oc.fillRect(0, 0, MW, MH);
+  oc.fillStyle = '#fff';
+  oc.textAlign = 'center';
+  oc.textBaseline = 'middle';
+  const cx = state.target.x * MW, cy = state.target.y * MH;
+  if (state.tgt.shape === 'image' && targetImg) {
+    const s = Math.min(MW, MH) * .62 * state.form.scale, ar = targetImg.height / targetImg.width || 1;
+    oc.drawImage(targetImg, cx - s / 2, cy - s * ar / 2, s, s * ar);
+  } else {
+    const fs = Math.round(Math.min(MW, MH) * .28 * state.form.scale);
+    oc.font = `700 ${fs}px ui-monospace, monospace`;
+    oc.fillText(state.form.text || 'MOTION', cx, cy);
+  }
+  const d0 = oc.getImageData(0, 0, MW, MH).data;
+  formMask = {
+    d: d0,
+    MW: MW,
+    MH: MH
+  };
+  const isImg = state.tgt.shape === 'image' && targetImg;
+  let minx = MW, miny = MH, maxx = 0, maxy = 0, any = false;
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    if (d0[(y * MW + x) * 4] > 128) {
+      any = true;
+      if (x < minx) minx = x;
+      if (x > maxx) maxx = x;
+      if (y < miny) miny = y;
+      if (y > maxy) maxy = y;
+    }
+  }
+  if (!any) {
+    minx = Math.round(MW * .25);
+    maxx = Math.round(MW * .75);
+    miny = Math.round(MH * .4);
+    maxy = Math.round(MH * .6);
+  }
+  let dMask = d0;
+  if (state.form.mode === 'frame' && !isImg) {
+    oc.lineJoin = 'round';
+    oc.strokeStyle = '#fff';
+    oc.lineWidth = Math.max(2, Math.round(11 * state.obj.size * sd));
+    oc.strokeText(state.form.text || 'MOTION', cx, cy);
+    dMask = oc.getImageData(0, 0, MW, MH).data;
+  }
+  const th = Math.max(1, maxy - miny), pad = Math.round(th * .55);
+  const bx0 = Math.max(0, minx - pad), by0 = Math.max(0, miny - pad), bx1 = Math.min(MW - 1, maxx + pad), by1 = Math.min(MH - 1, maxy + pad);
+  const maxN = 500;
+  let spacing = Math.max(7, 10 * state.obj.size);
+  for (let iter = 0; iter < 4; iter++) {
+    const stepM = Math.max(1, Math.round(spacing * sd)), pts = [];
+    if (state.form.mode === 'fill') {
+      for (let y = stepM >> 1; y < MH; y += stepM) for (let x = stepM >> 1; x < MW; x += stepM) {
+        if (d0[(y * MW + x) * 4] > 128) pts.push([ x / MW, y / MH ]);
+      }
+    } else {
+      for (let y = by0; y <= by1; y += stepM) for (let x = bx0; x <= bx1; x += stepM) {
+        if (dMask[(y * MW + x) * 4] <= 128) pts.push([ x / MW, y / MH ]);
+      }
+    }
+    formPoints = pts;
+    if (pts.length <= maxN || iter === 3) {
+      if (pts.length > maxN) formPoints = pts.slice(0, maxN);
+      break;
+    }
+    spacing *= Math.sqrt(pts.length / maxN) * 1.06;
+  }
+}
+
+function insideMask(px, py) {
+  if (!formMask) return false;
+  const mx = Math.floor(px / W * formMask.MW), my = Math.floor(py / H * formMask.MH);
+  if (mx < 0 || my < 0 || mx >= formMask.MW || my >= formMask.MH) return false;
+  return formMask.d[(my * formMask.MW + mx) * 4] > 128;
+}
+
+function drawGuide() {
+  const T = target();
+  ctx.save();
+  ctx.globalAlpha = .12;
+  ctx.fillStyle = state.look.invert ? PAPER : INK;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (state.tgt.shape === 'image' && targetImg) {
+    const s = Math.min(W, H) * .62 * state.form.scale, ar = targetImg.height / targetImg.width || 1;
+    ctx.drawImage(targetImg, T.x - s / 2, T.y - s * ar / 2, s, s * ar);
+  } else {
+    const fs = Math.round(Math.min(W, H) * .28 * state.form.scale);
+    ctx.font = `700 ${fs}px ui-monospace, monospace`;
+    ctx.fillText(state.form.text || 'MOTION', T.x, T.y);
+  }
+  ctx.restore();
+}
+
+function spawn(i) {
+  const r = rng(seed * 97 + i * 13);
+  const shape = state.obj.shape === 'mixed' ? MIX[Math.floor(r() * MIX.length)] : state.obj.shape;
+  const base = 4 + r() * 6, rad = Math.max(state.obj.minSize, base * (1 - state.obj.variance * .45 + state.obj.variance * .9 * r()));
+  return {
+    i: i,
+    g: shape,
+    rad: rad,
+    seed: r(),
+    leanGain: .3 + r() * 1,
+    oR: 0,
+    age: 0,
+    delay: .7,
+    av: 0,
+    idleSpin: (r() - .5) * 90,
+    contacts: 0,
+    crowd: 0,
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    sc: .14,
+    al: 0,
+    rot: (r() - .5) * 40,
+    rot0: (r() - .5) * 40,
+    lean: 0,
+    tx: 0,
+    ty: 0,
+    fx: 0,
+    fy: 0
+  };
+}
+
+function slotsFor(n, spreadK) {
+  const cols = Math.ceil(Math.sqrt(n * 1.6)), rows = Math.ceil(n / cols);
+  const gw = Math.min(W * .52, cols * 30 * spreadK), gh = Math.min(H * .6, rows * 30 * spreadK), ox = target().x - gw / 2, oy = target().y - gh / 2, out = [];
+  for (let k = 0; k < n; k++) {
+    const c = k % cols, rw = Math.floor(k / cols);
+    out.push({
+      x: ox + (cols > 1 ? c / (cols - 1) : .5) * gw,
+      y: oy + (rows > 1 ? rw / (rows - 1) : .5) * gh
+    });
+  }
+  return out;
+}
+
+function reinit() {
+  if (state.form.mode !== 'off') buildFormation();
+  let n = Math.round(state.sim.count);
+  if (state.form.mode !== 'off' && formPoints.length) n = formPoints.length;
+  bits = Array.from({
+    length: n
+  }, (_, i) => spawn(i));
+  const T = target(), beh = state.sim.behavior, r = rng(seed * 3 + 1), packSlots = slotsFor(n, state.pack.spread);
+  bits.forEach((b, i) => {
+    if (beh === 'fall') {
+      b.x = r() * W;
+      b.y = -r() * H * .5;
+      b.sc = 1;
+      b.al = 1;
+    } else if (beh === 'scatter') {
+      const a = r() * Math.PI * 2, sp = (.5 + r()) * 150;
+      b.x = T.x;
+      b.y = T.y;
+      b.vx = Math.cos(a) * sp;
+      b.vy = Math.sin(a) * sp;
+      b.sc = 1;
+      b.al = 1;
+    } else if (beh === 'orbit') {
+      const a = r() * Math.PI * 2, rr = (.3 + r() * state.orbit.spread) * Math.min(W, H) * .34;
+      b.oR = rr;
+      b.x = T.x + Math.cos(a) * rr;
+      b.y = T.y + Math.sin(a) * rr;
+      b.vx = -Math.sin(a) * state.orbit.speed;
+      b.vy = Math.cos(a) * state.orbit.speed;
+      b.sc = 1;
+      b.al = 1;
+    } else if (beh === 'pack') {
+      const s = packSlots[i] || T;
+      b.tx = s.x;
+      b.ty = s.y;
+      b.x = r() * W;
+      b.y = r() * H;
+      b.al = 0;
+    } else if (beh === 'magnet') {
+      const a = r() * Math.PI * 2, d = (.3 + r() * .5) * Math.min(W, H) * .42;
+      b.x = T.x + Math.cos(a) * d;
+      b.y = T.y + Math.sin(a) * d;
+      b.vx = (r() - .5) * 70;
+      b.vy = (r() - .5) * 70;
+      b.age = 0;
+      b.delay = .15 + r() * state.magnet.floatTime;
+      b.sc = .12;
+      b.al = 0;
+    } else {
+      b.x = r() * W;
+      b.y = r() * H;
+      b.vx = (r() - .5) * 30;
+      b.vy = (r() - .5) * 30;
+      b.sc = 1;
+      b.al = 1;
+    }
+    if (state.form.mode !== 'off' && formPoints.length) {
+      const p = formPoints[i] || formPoints[i % formPoints.length];
+      b.fx = p[0] * W;
+      b.fy = p[1] * H;
+    }
+  });
+  formStart = t;
+  kick = 0;
+  loopT = 0;
+}
+
+function step(b, dt) {
+  const s = state.sim, T = target(), beh = s.behavior, A = state.adv;
+  b.sc += (1 - b.sc) * Math.min(1, dt * 2.6);
+  b.al += (1 - b.al) * Math.min(1, dt * 2.4);
+  const mv = () => {
+    b.x += b.vx * dt * s.speed;
+    b.y += b.vy * dt * s.speed;
+  };
+  const wrap = () => {
+    if (b.x < -30) b.x = W + 30;
+    if (b.x > W + 30) b.x = -30;
+    if (b.y < -30) b.y = H + 30;
+    if (b.y > H + 30) b.y = -30;
+  };
+  if (beh === 'swarm') {
+    const sw = state.swarm, ali = sw.manner === 'Flock' ? .9 : 0;
+    const f = boidForce(b, bits, A.reach, sw.separation, ali, sw.cohesion);
+    let ax = f.fx, ay = f.fy;
+    const c = curlAt(b.x, b.y, t, A.swirl * .003, 1), m = Math.hypot(c.x, c.y) || 1;
+    ax += c.x / m * sw.flow * 3;
+    ay += c.y / m * sw.flow * 3;
+    if (sw.manner === 'Vortex') {
+      const dx = b.x - COM.x, dy = b.y - COM.y, d = Math.hypot(dx, dy) || 1;
+      ax += -dy / d * sw.flow * 2.4;
+      ay += dx / d * sw.flow * 2.4;
+    }
+    b.vx += ax * dt;
+    b.vy += ay * dt;
+    b.vx *= dampFactor(s.smooth, dt);
+    b.vy *= dampFactor(s.smooth, dt);
+    const sp = Math.hypot(b.vx, b.vy), floor = 10;
+    if (sp < floor && sp > .001) {
+      b.vx = b.vx / sp * floor;
+      b.vy = b.vy / sp * floor;
+    }
+    mv();
+    wrap();
+  } else if (beh === 'pack') {
+    const a = springAccel(b.x, b.y, b.vx, b.vy, b.tx, b.ty, 60, 17);
+    b.vx += a.ax * dt;
+    b.vy += a.ay * dt;
+    b.vx *= dampFactor(.85, dt);
+    b.vy *= dampFactor(.85, dt);
+    mv();
+  } else if (beh === 'magnet') {
+    b.age += dt;
+    if (b.age < b.delay) {
+      const c = curlAt(b.x, b.y, t, A.swirl * .003, 1), m = Math.hypot(c.x, c.y) || 1;
+      b.vx += c.x / m * 44 * dt;
+      b.vy += c.y / m * 44 * dt;
+    }
+    const k = clamp01((b.age - b.delay) / .7), mk = k * k * (3 - 2 * k);
+    const a = attract(b.x, b.y, T.x, T.y, state.magnet.urge * mk);
+    b.vx += a.ax * dt;
+    b.vy += a.ay * dt;
+    b.vx *= dampFactor(.8, dt);
+    b.vy *= dampFactor(.8, dt);
+    mv();
+  } else if (beh === 'orbit') {
+    const dx = b.x - T.x, dy = b.y - T.y, d = Math.hypot(dx, dy) || 1, tang = {
+      x: -dy / d,
+      y: dx / d
+    }, radialErr = d - b.oR;
+    const vtx = tang.x * state.orbit.speed - dx / d * radialErr * state.orbit.centerPull;
+    const vty = tang.y * state.orbit.speed - dy / d * radialErr * state.orbit.centerPull;
+    b.vx = lerp(b.vx, vtx, .12);
+    b.vy = lerp(b.vy, vty, .12);
+    mv();
+  } else if (beh === 'fall') {
+    b.vy += A.gravity * dt;
+    b.vx += Math.sin(t * .5 + b.seed * 6) * dt * 5;
+    b.vx *= dampFactor(.9, dt);
+    mv();
+    const fl = H - 24 - b.rad;
+    if (b.y > fl) {
+      b.y = fl;
+      b.vy *= -.34;
+      if (Math.abs(b.vy) < 5) b.vy = 0;
+    }
+    if (b.x < -20) b.x = W + 20;
+    if (b.x > W + 20) b.x = -20;
+  } else if (beh === 'scatter') {
+    b.vx *= dampFactor(.5, dt);
+    b.vy *= dampFactor(.5, dt);
+    mv();
+  }
+  if ((state.form.mode === 'fill' || state.form.mode === 'frame') && formPoints.length) {
+    const k = clamp01((t - formStart) / 1.4), e = k * k * (3 - 2 * k);
+    const a = springAccel(b.x, b.y, b.vx, b.vy, b.fx, b.fy, 130 * e, 20);
+    b.vx += a.ax * dt;
+    b.vy += a.ay * dt;
+    if (e > .6) {
+      b.vx *= dampFactor(.82, dt);
+      b.vy *= dampFactor(.82, dt);
+    }
+  }
+  const R = state.rot, cr = b.crowd || 0, spd = Math.hypot(b.vx, b.vy), slow = spd < 14;
+  b.av *= dampFactor(slow ? .2 : .86 - cr * .55, dt, 1);
+  b.rot = (b.rot || 0) + b.av * dt;
+  if (R.orient === 'velocity') {
+    if (spd > 16) {
+      const w = Math.min(1, (spd - 16) / 40);
+      const targ = Math.atan2(b.vy, b.vx) * 180 / Math.PI + 90;
+      b.rot = angLerp(b.rot, targ, R.turn * dt * 6 * (1 - cr * .85) * w);
+    }
+  } else if (R.orient === 'lean') {
+    const leanT = b.rot0 * .3 + Math.max(-26, Math.min(26, b.vy * .06 * b.leanGain));
+    b.rot += (leanT - b.rot) * Math.min(1, R.turn * dt * 4);
+  } else if (R.orient === 'none') {
+    b.rot += (b.rot0 - b.rot) * Math.min(1, dt * 2);
+  }
+  b.rot += b.idleSpin * R.idle * dt;
+  if (cr > .35) {
+    const c = dampFactor(.72, dt);
+    b.vx *= c;
+    b.vy *= c;
+  }
+}
+
+function drawGlyph(b) {
+  const s = Math.max(.12, b.sc) * state.obj.size, r = b.rad;
+  ctx.save();
+  ctx.translate(b.x, b.y);
+  ctx.rotate((b.rot || 0) * Math.PI / 180);
+  ctx.scale(s, s);
+  ctx.globalAlpha = Math.max(0, Math.min(1, b.al));
+  ctx.fillStyle = ctx.strokeStyle = state.look.invert ? PAPER : state.look.color;
+  if (b.g === 'char') {
+    ctx.font = `${(r * 2.3).toFixed(1)}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(state.obj.char || '✳', 0, 0);
+  } else if (b.g === 'circle') {
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, 6.2832);
+    ctx.fill();
+  } else if (b.g === 'pill') {
+    ctx.beginPath();
+    ctx.roundRect(-r * .32, -r * 1.35, r * .64, r * 2.7, r * .32);
+    ctx.fill();
+  } else if (b.g === 'diamond') {
+    ctx.beginPath();
+    ctx.moveTo(0, -r);
+    ctx.lineTo(r * .72, 0);
+    ctx.lineTo(0, r);
+    ctx.lineTo(-r * .72, 0);
+    ctx.closePath();
+    ctx.fill();
+  } else if (b.g === 'triangle') {
+    const h = r * 1.1;
+    ctx.beginPath();
+    ctx.moveTo(0, -h);
+    ctx.lineTo(h * .87, h * .5);
+    ctx.lineTo(-h * .87, h * .5);
+    ctx.closePath();
+    ctx.fill();
+  } else if (b.g === 'ring') {
+    ctx.lineWidth = r * .42;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * .82, 0, 6.2832);
+    ctx.stroke();
+  } else if (b.g === 'plus') {
+    ctx.lineWidth = r * .4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-r, 0);
+    ctx.lineTo(r, 0);
+    ctx.moveTo(0, -r);
+    ctx.lineTo(0, r);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawCenter() {
+  const T = target(), sh = state.tgt.shape;
+  if (sh === 'none') return;
+  const base = 54 * state.tgt.size * (1 + .03 * Math.sin(t * 2.1) + kick), fill = state.look.invert ? PAPER : INK;
+  ctx.save();
+  ctx.translate(T.x, T.y);
+  if (sh === 'circle') {
+    ctx.beginPath();
+    ctx.arc(0, 0, base * .5, 0, 6.2832);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  } else if (sh === 'ring') {
+    ctx.lineWidth = base * .1;
+    ctx.strokeStyle = fill;
+    ctx.beginPath();
+    ctx.arc(0, 0, base * .46, 0, 6.2832);
+    ctx.stroke();
+  } else if (sh === 'plate') {
+    ctx.beginPath();
+    ctx.roundRect(-base / 2, -base / 2, base, base, base * .26);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  } else if (sh === 'char') {
+    ctx.font = `700 ${base.toFixed(0)}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = fill;
+    ctx.fillText(state.tgt.char || 'S', 0, 0);
+  } else if (sh === 'image' && targetImg) {
+    const ar = targetImg.height / targetImg.width || 1, w = base, h = base * ar;
+    ctx.drawImage(targetImg, -w / 2, -h / 2, w, h);
+  } else if (sh === 'image') {
+    ctx.globalAlpha = .4;
+    ctx.setLineDash([ 4, 4 ]);
+    ctx.strokeStyle = fill;
+    ctx.strokeRect(-base / 2, -base / 2, base, base);
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+function frame(now) {
+  const dt = Math.min(.05, (now - lastT) / 1e3);
+  lastT = now;
+  t += dt;
+  kick *= dampFactor(.18, dt, 1);
+  if (state.play.loop) {
+    loopT += dt;
+    if (loopT > 4) {
+      reinit();
+    }
+  }
+  let cx = 0, cy = 0;
+  for (const b of bits) {
+    cx += b.x;
+    cy += b.y;
+  }
+  COM.x = cx / Math.max(1, bits.length);
+  COM.y = cy / Math.max(1, bits.length);
+  const bg = state.look.invert ? INK : PAPER;
+  if (state.look.trail > .001) {
+    ctx.globalAlpha = lerp(1, .05, clamp01(state.look.trail));
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (state.form.mode !== 'off') {
+    if (state.form.showGuide) drawGuide();
+  } else if (usesCenter(state.sim.behavior) && state.tgt.shape !== 'none') drawCenter();
+  for (const b of bits) step(b, dt);
+  resolveBodies(bits, state.inter.collide, state.inter.push, state.inter.avoid, state.inter.radius, state.rot.spin);
+  for (const b of bits) drawGlyph(b);
+  requestAnimationFrame(frame);
+}
+
+cv.addEventListener('pointerdown', e => {
+  state.target.x = e.clientX / W;
+  state.target.y = e.clientY / H;
+  if ([ 'pack', 'magnet', 'scatter', 'orbit' ].includes(state.sim.behavior)) reinit();
+});
+
+const $ = s => document.querySelector(s);
+
+const getPath = k => k.split('.').reduce((o, p) => o[p], state);
+
+const setPath = (k, v) => {
+  const ps = k.split('.'), last = ps.pop();
+  ps.reduce((o, p) => o[p], state)[last] = v;
+};
+
+function buildSliders(elId, defs, clear = true) {
+  const el = $('#' + elId);
+  if (clear) [ ...el.querySelectorAll('.row') ].forEach(r => r.remove());
+  for (const [key, name, min, max, stp] of defs) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    if (min === 0 && max === 1 && stp === 1) {
+      row.classList.add('toggle');
+      row.innerHTML = `<label>${name}</label><input type="checkbox" class="sw">`;
+      const cb = row.querySelector('input');
+      cb.checked = !!getPath(key);
+      cb.dataset.key = key;
+      cb.addEventListener('change', () => setPath(key, cb.checked ? 1 : 0));
+      el.appendChild(row);
+      continue;
+    }
+    row.innerHTML = `<label>${name}</label><input type="range" min="${min}" max="${max}" step="${stp}"><input type="number" min="${min}" max="${max}" step="${stp}">`;
+    const inp = row.querySelector('input[type=range]'), val = row.querySelector('input[type=number]'), fmt = x => +(+x).toFixed(stp < 1 ? 2 : 0);
+    inp.value = getPath(key);
+    val.value = fmt(getPath(key));
+    inp.dataset.key = key;
+    inp.addEventListener('input', () => {
+      setPath(key, +inp.value);
+      val.value = fmt(inp.value);
+    });
+    val.addEventListener('change', () => {
+      const x = parseFloat(val.value);
+      if (isFinite(x)) {
+        setPath(key, x);
+        inp.value = x;
+      }
+    });
+    el.appendChild(row);
+  }
+}
+
+function addSelect(elId, key, opts, label, onChange) {
+  const el = $('#' + elId), row = document.createElement('div');
+  row.className = 'row sel2';
+  row.innerHTML = `<label>${label}</label><select class="tin">${opts.map(o => `<option ${o === getPath(key) ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+  const sel = row.querySelector('select');
+  sel.dataset.key = key;
+  sel.addEventListener('change', e => {
+    setPath(key, e.target.value);
+    onChange && onChange();
+  });
+  el.appendChild(row);
+}
+
+function addText(elId, key, label) {
+  const el = $('#' + elId), row = document.createElement('div');
+  row.className = 'row sel2';
+  row.innerHTML = `<label>${label}</label><input class="tin" maxlength="3" value="${getPath(key)}">`;
+  const inp = row.querySelector('input');
+  inp.dataset.key = key;
+  inp.addEventListener('input', e => setPath(key, e.target.value || ''));
+  el.appendChild(row);
+}
+
+function applyManner(m) {
+  const p = MANNER_PRESET[m];
+  if (!p) return;
+  state.swarm.cohesion = p.cohesion;
+  state.swarm.separation = p.separation;
+  state.swarm.flow = p.flow;
+}
+
+function buildBehaviorParams() {
+  const el = $('#gBeh');
+  el.innerHTML = '<legend>Behavior params</legend>';
+  const b = state.sim.behavior;
+  if (b === 'swarm') {
+    addSelect('gBeh', 'swarm.manner', MANNERS, 'Manner', () => {
+      applyManner(state.swarm.manner);
+      buildBehaviorParams();
+      reinit();
+    });
+    buildSliders('gBeh', [ [ 'swarm.cohesion', 'Cohesion', 0, 1, .02 ], [ 'swarm.separation', 'Separation', 0, 700, 10 ], [ 'swarm.flow', 'Flow / vortex', 0, 80, 2 ] ], false);
+  } else if (b === 'pack') {
+    buildSliders('gBeh', [ [ 'pack.spread', 'Spread (density)', .3, 2.5, .1 ] ], false);
+  } else if (b === 'magnet') {
+    buildSliders('gBeh', [ [ 'magnet.urge', 'Magnet force', 8, 90, 2 ], [ 'magnet.floatTime', 'Float time', 0, 2, .1 ] ], false);
+  } else if (b === 'orbit') {
+    buildSliders('gBeh', [ [ 'orbit.speed', 'Orbit speed', 10, 160, 2 ], [ 'orbit.centerPull', 'Center pull', 0, 1.6, .05 ], [ 'orbit.spread', 'Radius spread', .1, 1, .05 ] ], false);
+  } else {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = 'No extra parameters: use Motor and Interaction.';
+    el.appendChild(p);
+  }
+}
+
+function resyncAll() {
+  document.querySelectorAll('#panel input[type=range]').forEach(inp => {
+    const k = inp.dataset.key;
+    if (!k) return;
+    const x = getPath(k), stp = +inp.step;
+    inp.value = x;
+    inp.nextElementSibling.value = +(+x).toFixed(stp < 1 ? 2 : 0);
+  });
+  document.querySelectorAll('#panel input.sw').forEach(cb => {
+    if (cb.dataset.key) cb.checked = !!getPath(cb.dataset.key);
+  });
+  document.querySelectorAll('#panel select[data-key]').forEach(s => {
+    s.value = getPath(s.dataset.key);
+  });
+  document.querySelectorAll('#panel input.tin[data-key]').forEach(i => {
+    i.value = getPath(i.dataset.key);
+  });
+  $('#col').value = state.look.color;
+  $('#tSpeed').value = state.sim.speed;
+  const ft = $('#formText');
+  if (ft) ft.value = state.form.text;
+  const fg = $('#formGuide');
+  if (fg) fg.checked = !!state.form.showGuide;
+  behList.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', x.dataset.id === state.sim.behavior));
+  refreshBehText();
+}
+
+buildSliders('gSim', [ [ 'sim.count', 'Count', 6, 200, 1 ], [ 'sim.speed', 'Speed', .3, 2.2, .1 ], [ 'sim.smooth', 'Smoothing', .5, .96, .01 ] ]);
+
+buildSliders('gInter', [ [ 'inter.collide', 'Collide (no overlap)', 0, 1, 1 ], [ 'inter.push', 'Push', 0, 2, .05 ], [ 'inter.avoid', 'Avoid', 0, 1.5, .05 ], [ 'inter.radius', 'Body size', .5, 2, .05 ] ]);
+
+addSelect('gRot', 'rot.orient', ORIENT_MODES, 'Orient', null);
+
+buildSliders('gRot', [ [ 'rot.turn', 'Turn speed', 0, 1.5, .05 ], [ 'rot.spin', 'Collision spin', 0, 1.5, .05 ], [ 'rot.idle', 'Idle spin', 0, 1, .05 ] ], false);
+
+buildSliders('gAdv', [ [ 'adv.gravity', 'Gravity', 10, 200, 2 ], [ 'adv.swirl', 'Swirl scale', .2, 2.4, .1 ], [ 'adv.reach', 'Neighbor reach', 30, 180, 2 ] ]);
+
+addSelect('gForm', 'form.mode', [ 'off', 'fill', 'frame' ], 'Mode', () => reinit());
+
+(() => {
+  const el = $('#gForm'), row = document.createElement('div');
+  row.className = 'row sel2';
+  row.innerHTML = `<label>Text</label><input class="tin" id="formText" maxlength="14" value="${state.form.text}">`;
+  el.appendChild(row);
+  $('#formText').addEventListener('input', e => {
+    state.form.text = e.target.value || '';
+    reinit();
+  });
+})();
+
+buildSliders('gForm', [ [ 'form.scale', 'Text scale', .5, 4, .1 ] ], false);
+
+(() => {
+  const r = document.querySelector('#gForm input[data-key="form.scale"]');
+  if (r) r.addEventListener('change', () => reinit());
+})();
+
+(() => {
+  const el = $('#gForm'), row = document.createElement('div');
+  row.className = 'row toggle';
+  row.innerHTML = `<label>Show guide</label><input type="checkbox" class="sw" id="formGuide">`;
+  el.appendChild(row);
+  const cb = $('#formGuide');
+  cb.checked = !!state.form.showGuide;
+  cb.addEventListener('change', () => state.form.showGuide = cb.checked ? 1 : 0);
+})();
+
+(() => {
+  const el = $('#gForm'), p = document.createElement('p');
+  p.className = 'note';
+  p.textContent = 'Fill: particles gather into the letters; Frame: they outline them. For a logo, load a PNG into the Center object (image) and it becomes the mask.';
+  el.appendChild(p);
+})();
+
+addSelect('gObj', 'obj.shape', GLYPH_SHAPES, 'Shape', reinit);
+
+addText('gObj', 'obj.char', 'Symbol');
+
+buildSliders('gObj', [ [ 'obj.size', 'Size', .5, 2.4, .1 ], [ 'obj.variance', 'Size variance', 0, 1, .05 ], [ 'obj.minSize', 'Min size', 3, 12, .5 ] ], false);
+
+addSelect('gTgt', 'tgt.shape', CENTER_SHAPES, 'Shape');
+
+addText('gTgt', 'tgt.char', 'Symbol');
+
+buildSliders('gTgt', [ [ 'tgt.size', 'Center size', .4, 3, .1 ] ], false);
+
+(() => {
+  const el = $('#gTgt'), row = document.createElement('div');
+  row.className = 'row sel2';
+  row.innerHTML = `<label>Your image</label><button class="btn" id="tgtImgBtn" style="margin:0">Load…</button>`;
+  el.appendChild(row);
+  const fi = document.createElement('input');
+  fi.type = 'file';
+  fi.accept = 'image/*';
+  fi.hidden = true;
+  fi.id = 'tgtImgFile';
+  el.appendChild(fi);
+  $('#tgtImgBtn').addEventListener('click', () => fi.click());
+  fi.addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const img = new Image;
+    img.onload = () => {
+      targetImg = img;
+      state.tgt.shape = 'image';
+      const sel = document.querySelector('#gTgt select[data-key="tgt.shape"]');
+      if (sel) sel.value = 'image';
+    };
+    img.src = URL.createObjectURL(f);
+  });
+})();
+
+buildSliders('gLook', [ [ 'look.trail', 'Trail length', 0, 1, .05 ], [ 'look.invert', 'Invert (night)', 0, 1, 1 ] ]);
+
+const behList = $('#behList');
+
+BEHAVIORS.forEach(b => {
+  const btn = document.createElement('button');
+  btn.dataset.id = b.id;
+  btn.setAttribute('aria-selected', b.id === state.sim.behavior);
+  btn.textContent = b.name;
+  btn.addEventListener('click', () => {
+    state.sim.behavior = b.id;
+    behList.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', x.dataset.id === b.id));
+    refreshBehText();
+    buildBehaviorParams();
+    reinit();
+  });
+  behList.appendChild(btn);
+});
+
+function refreshBehText() {
+  const b = BEHAVIORS.find(x => x.id === state.sim.behavior);
+  $('#nowName').textContent = b.name;
+  $('#nowDesc').textContent = b.ru;
+  $('#behNote').textContent = b.desc;
+}
+
+buildBehaviorParams();
+
+$('#tabs').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  document.querySelectorAll('#tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+  document.querySelectorAll('.tab').forEach(tb => tb.classList.toggle('on', tb.dataset.tab === b.dataset.tab));
+});
+
+document.querySelectorAll('#panel legend').forEach(lg => lg.addEventListener('click', () => lg.parentElement.classList.toggle('closed')));
+
+$('#tReplay').addEventListener('click', reinit);
+
+$('#tLoop').addEventListener('click', () => {
+  state.play.loop = state.play.loop ? 0 : 1;
+  const b = $('#tLoop');
+  b.textContent = 'Loop: ' + (state.play.loop ? 'on' : 'off');
+  b.classList.toggle('on', !!state.play.loop);
+  loopT = 0;
+});
+
+$('#tSpeed').value = state.sim.speed;
+
+$('#tSpeed').addEventListener('input', e => {
+  state.sim.speed = +e.target.value;
+  const r = document.querySelector('#gSim input[data-key="sim.speed"]');
+  if (r) {
+    r.value = e.target.value;
+    r.nextElementSibling.value = (+e.target.value).toFixed(1);
+  }
+});
+
+$('#col').value = state.look.color;
+
+$('#col').addEventListener('input', e => state.look.color = e.target.value);
+
+$('#saveCfg').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.download = 'motion-primer-config.json';
+  a.href = URL.createObjectURL(new Blob([ JSON.stringify({
+    version: 7,
+    sim: state.sim,
+    swarm: state.swarm,
+    pack: state.pack,
+    magnet: state.magnet,
+    orbit: state.orbit,
+    inter: state.inter,
+    rot: state.rot,
+    form: state.form,
+    obj: state.obj,
+    tgt: state.tgt,
+    look: state.look,
+    adv: state.adv,
+    target: state.target
+  }, null, 1) ], {
+    type: 'application/json'
+  }));
+  a.click();
+});
+
+$('#loadCfg').addEventListener('click', () => $('#loadFile').click());
+
+$('#loadFile').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  f.text().then(txt => {
+    const cfg = JSON.parse(txt);
+    for (const k of [ 'sim', 'swarm', 'pack', 'magnet', 'orbit', 'inter', 'rot', 'form', 'obj', 'tgt', 'look', 'adv', 'target' ]) if (cfg[k]) state[k] = {
+      ...state[k],
+      ...cfg[k]
+    };
+    buildBehaviorParams();
+    resyncAll();
+    reinit();
+  });
+});
+
+$('#pngBtn').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.download = 'motion-primer.png';
+  a.href = cv.toDataURL('image/png');
+  a.click();
+});
+
+function toggleUI() {
+  document.body.classList.toggle('noui');
+}
+
+$('#hideBtn').addEventListener('click', toggleUI);
+
+addEventListener('keydown', e => {
+  if (e.key.toLowerCase() === 'h' && ![ 'INPUT', 'TEXTAREA', 'SELECT' ].includes(e.target.tagName)) toggleUI();
+});
+
+resize();
+
+refreshBehText();
+
+reinit();
+
+requestAnimationFrame(frame);
+</script>
+
+
+<style>#cv.__scninv{filter:invert(1) hue-rotate(180deg)}
+#__invBtn{position:fixed;right:16px;bottom:16px;z-index:20;width:34px;height:34px;border-radius:99px;
+  border:1px solid var(--line,#dcdad4);background:var(--panel,#fdfdfc);color:var(--ink,#1a1a1a);
+  font:14px/1 ui-monospace,monospace;cursor:pointer;box-shadow:0 2px 10px rgba(20,20,25,.06)}
+#__invBtn[aria-pressed="true"]{background:var(--ink,#1a1a1a);color:var(--panel,#fdfdfc)}
+body.noui #__invBtn{display:none}</style>
+<button id="__invBtn" aria-pressed="false" title="Invert scene (I)">◑</button>
+<script>
+(function() {
+  var c = document.getElementById('cv'), b = document.getElementById('__invBtn');
+  if (!c || !b) return;
+  function t() {
+    var on = c.classList.toggle('__scninv');
+    b.setAttribute('aria-pressed', on);
+  }
+  b.addEventListener('click', t);
+  addEventListener('keydown', function(e) {
+    var g = e.target && e.target.tagName;
+    if (g === 'INPUT' || g === 'TEXTAREA' || g === 'SELECT') return;
+    if (e.key && e.key.toLowerCase() === 'i') t();
+  });
+})();
+</script>
+
+<script>(function(){function u(r){var a=+r.min||0,b=+r.max||100,v=+r.value;r.style.setProperty('--p',((v-a)/((b-a)||1)*100)+'%')}function all(){document.querySelectorAll('input[type=range]').forEach(u)}document.addEventListener('input',function(e){if(e.target&&e.target.type==='range')u(e.target)});setInterval(all,250);all()})();</script>
+</body>
+</html>
